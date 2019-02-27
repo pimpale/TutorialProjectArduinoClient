@@ -1,4 +1,3 @@
-#include <inttypes.h>
 #include <string.h>
 
 #include <ESP8266HTTPClient.h>
@@ -21,7 +20,7 @@
 
 #define BAUD 9600
 #define PROTOCOL "http"
-#define HOST "99-103-193-239.lightspeed.sntcca.sbcglobal.net:8080"
+#define HOST "vro"
 #define THIS_LOCATION 1
 
 MFRC522 mfrc522;  // Create MFRC522 instance
@@ -29,12 +28,9 @@ MFRC522::MIFARE_Key key;
 
 void setup() {
   Serial.begin(BAUD);
-  while (!Serial)
-    ;
-  Serial.printf("setup: complete\n");
-
+  while (!Serial);
+  
   initMFRC522(&mfrc522, &key);
-  Serial.printf("%s, %s \n", SUPER_SECRET_SSID, SUPER_SECRET_PASSWORD);
   wpaConnect(SUPER_SECRET_SSID, SUPER_SECRET_PASSWORD);
 
   Serial.printf("setup: complete\n");
@@ -86,7 +82,7 @@ void loop() {
 
 void mkEncounterUrl(char* dest, size_t destlen, char* protocol, char* host,
                     char* eventType, uint32_t locationId, uint32_t userId) {
-  snprintf(dest, destlen, "%s://%s/?type=%s&locationId=%u&userId=%u", protocol,
+  snprintf(dest, destlen, "%s://%s/encounter/new/?type=%s&locationId=%u&userId=%u", protocol,
            host, eventType, locationId, userId);
 }
 
@@ -177,13 +173,6 @@ uint32_t enterpriseWpaConnect(const char* ssid, const char* username,
   }
   Serial.printf("%s: complete\n", mname);
   return ERR_OK;
-}
-
-void dump_char_array(char* buffer, char bufferSize) {
-  for (char i = 0; i < bufferSize; i++) {
-    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-    Serial.print(buffer[i], HEX);
-  }
 }
 
 void to_uint32_t(uint32_t* dest, uint8_t* src) {
