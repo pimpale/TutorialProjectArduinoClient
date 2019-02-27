@@ -1,6 +1,8 @@
 #include <string.h>
+#include <inttypes.h>
 
 #include <ESP8266HTTPClient.h>
+#include <ESP8266WiFi.h>
 #include <MFRC522.h>
 #include <SPI.h>
 
@@ -13,14 +15,17 @@
  * SUPER_SECRET_USERNAME
  * SUPER_SECRET_PASSWORD 
  */
-#include "super_secret_password_definitions.h"
+#include "super_secret_password_definition.h"
 
 
+#define ERR_OK 0
+#define ERR_NOMEM 1
 
-static const uint32_t BAUD = 9600;
-static const char* PROTOCOL = "http://";
-static const char* SERVER_ADDRESS = "99-103-193-239.lightspeed.sntcca.sbcglobal.net:8080";
-static const uint32_t THIS_LOCATION_ID = 1;
+
+#define BAUD 9600
+#define PROTOCOL "http"
+#define HOST "99-103-193-239.lightspeed.sntcca.sbcglobal.net:8080"
+#define THIS_LOCATION 1
 
 
 MFRC522 mfrc522;  // Create MFRC522 instance
@@ -32,6 +37,7 @@ void setup() {
   Serial.printf("setup: complete\n");
 
   initMFRC522(&mfrc522, &key);
+  Serial.printf("%s, %s \n", SUPER_SECRET_SSID, SUPER_SECRET_PASSWORD);
   wpaConnect(SUPER_SECRET_SSID, SUPER_SECRET_PASSWORD);
 
   Serial.printf("setup: complete\n");
@@ -43,8 +49,8 @@ void loop() {
   char sector = 1;
   char blockAddr = 4;
   MFRC522::StatusCode status;
-  char buffer[18];
-  char size = sizeof(buffer);
+  byte buffer[18];
+  byte size = sizeof(buffer);
 
   // Look for new cards
   if (!mfrc522.PICC_IsNewCardPresent()) {
@@ -63,18 +69,29 @@ void loop() {
     Serial.println(mfrc522.GetStatusCodeName(status));
     return;
   }
+  status = (MFRC522::StatusCode) mfrc522.MIFARE_Read(blockAddr, buffer, &size);
+  if (status != MFRC522::STATUS_OK) {
+        Serial.print(F("MIFARE_Read() failed: "));
+        Serial.println(mfrc522.GetStatusCodeName(status));
+  }
 
-  uint64_t 
-  Serial.printf("The user ID number is: %ld \n", (unsigned long)userId);
-  char url[256];
-  sprintf(url, "http://192.168.1.96/encounter/new/?locationId=%ld&userId=%ld",
-          (unsigned long)locationId, (unsigned long)userId);
-  httpGet("http://google.com");
+  
+  uint64_t userId;
+  to_uint64_t(&userId, (uint8_t*)buffer);
 
+  char encounterUrl[1024];
+  mkEncounterUrl(encounterUrl, 1024, PROTOCOL, HOST, "in", THIS_LOCATION, userId);
+  httpGet(encounterUrl);
+  
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
-  // Dump debug info about the card; PICC_HaltA() is automatically called
-  // mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
+}
+
+void mkEncounterUrl(char* dest, size_t destlen, 
+                    char* protocol, char* host, char* eventType, 
+                    uint64_t locationId, uint64_t userId) {
+  snprintf(dest, destlen, "%s://%s/?type=%s&locationId=%" PRIu64 "&userId=%" PRIu64, 
+           protocol, host, eventType, locationId, userId);
 }
 
 void initMFRC522(MFRC522* mfrc522, MFRC522::MIFARE_Key* key) {
@@ -95,7 +112,7 @@ void initMFRC522(MFRC522* mfrc522, MFRC522::MIFARE_Key* key) {
   Serial.printf("%s: complete\n", mname);
 }
 
-void httpGet(char* url) {
+uint32_t httpGet(char* url) {
   char* mname = "httpGet";
   HTTPClient http;            // instantiate httpclient
   http.begin(url);            // specify request destination
@@ -110,18 +127,17 @@ void httpGet(char* url) {
                   http.errorToString(httpCode).c_str());
   }
   http.end();  // close connection
+  return ERR_OK;
 }
 
-void wpaConnect(const char* ssid, const char* password) {
+uint32_t wpaConnect(const char* ssid, const char* password) {
   char* mname = "wpaConnect";
   Serial.printf("%s: begin\n", mname);
-  wifi_set_opmode(STATION_MODE);
-  int ret;
+  WiFi.begin(ssid, password);
   while(true) {
-    ret = WiFi.begin(ssid, password);
-    if(ret == WL_CONNECTED) {
+    if(WiFi.status() == WL_CONNECTED) {
      Serial.printf("%s: connection succeeded\n", mname);
-     Serial.printf("%s: current ip address: %s\n", mname, WiFi.localIp().toString().c_str());
+     Serial.printf("%s: current ip address: %s\n", mname, WiFi.localIP().toString().c_str());
      break;
     }
     else {
@@ -130,9 +146,10 @@ void wpaConnect(const char* ssid, const char* password) {
     }
   }
   Serial.printf("%s: complete\n", mname);
+  return ERR_OK;
 }
 
-void enterpriseWpaConnect(const char* ssid, const char* username, const char* password) {
+uint32_t enterpriseWpaConnect(const char* ssid, const char* username, const char* password) {
   char* mname = "enterpriseWpaConnect";
 
   wifi_set_opmode(STATION_MODE);
@@ -162,6 +179,7 @@ void enterpriseWpaConnect(const char* ssid, const char* username, const char* pa
     Serial.printf("%s:  wifi_station_connect failed\n", mname);
   }
   Serial.printf("%s: complete\n", mname);
+  return ERR_OK;
 }
 
 void dump_char_array(char* buffer, char bufferSize) {
