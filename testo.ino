@@ -20,7 +20,7 @@
 
 #define BAUD 9600
 #define PROTOCOL "http"
-#define HOST "vro"
+#define HOST "vro:8080"
 #define THIS_LOCATION 1
 
 MFRC522 mfrc522;  // Create MFRC522 instance
@@ -32,7 +32,7 @@ void setup() {
   
   initMFRC522(&mfrc522, &key);
   wpaConnect(SUPER_SECRET_SSID, SUPER_SECRET_PASSWORD);
-
+ 
   Serial.printf("setup: complete\n");
 }
 
@@ -66,16 +66,22 @@ void loop() {
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("MIFARE_Read() failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
+    return;
   }
 
+  // Convert the buffer to an integer
   uint32_t userId;
   to_uint32_t(&userId, (uint8_t*)buffer);
 
+
+  //Substitute the values into a url 
   char encounterUrl[1024];
   mkEncounterUrl(encounterUrl, 1024, PROTOCOL, HOST, "in", THIS_LOCATION,
                  userId);
+  //Send request to url
   httpGet(encounterUrl);
 
+  //MFRC 
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
 }
